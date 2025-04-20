@@ -15,5 +15,5 @@ interface BookDao {
     fun getBooksByUsername(email: String): Flow<List<Book>>
 
     @Query("SELECT * FROM Book")
-    fun getAllBooks(): LiveData<List<Book>> // This method should exist
+    fun getAllBooks(): LiveData<List<Book>>
 }

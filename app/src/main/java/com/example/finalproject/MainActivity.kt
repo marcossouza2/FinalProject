@@ -1,5 +1,6 @@
 package com.example.finalproject
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
 import android.os.Bundle
@@ -12,11 +13,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -55,14 +54,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Initialize the Room database
+
         database = AppDatabase.getDatabase(applicationContext)
         bookDao = database.bookDao()
         userDao = database.userDao()
 
         setContent {
             FinalProjectTheme {
-                // Setup the NavController
                 val navController = rememberNavController()
 
                 NavHost(
@@ -89,7 +87,7 @@ class MainActivity : ComponentActivity() {
                         SignUpScreen(
                             userDao,
                             onSignUpClick = { username, email, password, address, phone ->
-                                // Launch coroutine to insert the user into the database
+
                                 val user = User(
                                     username = username,
                                     email = email,
@@ -98,20 +96,23 @@ class MainActivity : ComponentActivity() {
                                     phone = phone
                                 )
                                 coroutineScope.launch {
-                                    userDao.insertUser(user) // Now this is inside a coroutine
+                                    userDao.insertUser(user)
                                 }
-                                navController.navigate("login") // Navigate to login after sign-up
+                                navController.navigate("login")
                             },
                             onNavigateToLogin = {
-                                navController.navigate("login") // Handle the navigate to login screen
+                                navController.navigate("login")
                             }
                         )
                     }
                     composable("home") {
-                        HomeScreen(bookDao, navController) // Pass bookDao to HomeScreen for accessing books
+                        HomeScreen(bookDao, navController)
                     }
                     composable("addBook") {
                         AddBookScreen(navController, userDao, bookDao, context = LocalContext.current)
+                    }
+                    composable("my_books") {
+                        MyBooksScreen(bookDao = bookDao, navController = navController)
                     }
                 }
             }
@@ -186,20 +187,17 @@ fun LoginScreenUI(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Login Button
         Button(
             onClick = {
-                // Validate login credentials within a coroutine
+
                 if (email.isNotEmpty() && password.isNotEmpty()) {
-                    // Launch coroutine to check login
+
                     userViewModel.validateLogin(email, password) { user ->
                         if (user != null) {
-                            // Successful login, navigate to home
                             saveUserEmail(context, user.email)
                             onNavigateToHome()
 
                         } else {
-                            // Show error message for invalid login
                             errorMessage = "Invalid credentials"
                             Log.e("LoginScreenUI", "Login failed for $email")
                         }
@@ -213,7 +211,6 @@ fun LoginScreenUI(
             Text("Log In")
         }
 
-        // Error Message
         if (errorMessage.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
@@ -373,8 +370,9 @@ fun HomeScreen(bookDao: BookDao, navController: NavController) {
     val context = LocalContext.current
     val bookViewModel = BookViewModel(context.applicationContext as Application)
 
-    // Observe all books from the database
     val books by bookViewModel.allBooks.observeAsState(initial = emptyList())
+
+    var searchQuery by remember { mutableStateOf("") }
 
     Scaffold(
         bottomBar = {
@@ -391,8 +389,22 @@ fun HomeScreen(bookDao: BookDao, navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            TextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = { Text("Search for a book") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val filteredBooks = remember(books, searchQuery) {
+                books.filter { it.title.contains(searchQuery, ignoreCase = true) }
+            }
+
             LazyColumn {
-                items(books) { book ->
+                items(filteredBooks) { book ->
                     BookCard(book)
                 }
             }
@@ -400,32 +412,7 @@ fun HomeScreen(bookDao: BookDao, navController: NavController) {
     }
 }
 
-@Composable
-fun SortDropdown(selected: String, onOptionSelected: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    val options = listOf("Date", "Name")
 
-    Box {
-        TextButton(onClick = { expanded = true }) {
-            Text("Sort by: $selected")
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option) },
-                    onClick = {
-                        onOptionSelected(option)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
 
 @Composable
 fun BookCard(book: Book) {
@@ -445,14 +432,6 @@ fun BookCard(book: Book) {
     }
 }
 
-data class Book(
-    val title: String,
-    val author: String,
-    val year: Int,
-    val genre: String,
-    val price: String
-)
-
 @Composable
 fun BottomNavigationBar(navController: NavController) {
     NavigationBar {
@@ -461,19 +440,19 @@ fun BottomNavigationBar(navController: NavController) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_home),
                     contentDescription = "Home",
-                    modifier = Modifier.size(24.dp) // Set the icon size to 24dp (half the original size)
+                    modifier = Modifier.size(24.dp)
                 )
             },
             label = { Text("Home") },
             selected = true,
-            onClick = { /* Stay on Home */ }
+            onClick = { navController.navigate("home") }
         )
         NavigationBarItem(
             icon = {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_add_book),
                     contentDescription = "Add Book",
-                    modifier = Modifier.size(24.dp) // Set the icon size to 24dp
+                    modifier = Modifier.size(24.dp)
                 )
             },
             label = { Text("Add Book") },
@@ -485,31 +464,24 @@ fun BottomNavigationBar(navController: NavController) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_my_books),
                     contentDescription = "My Books",
-                    modifier = Modifier.size(24.dp) // Set the icon size to 24dp
+                    modifier = Modifier.size(24.dp)
                 )
             },
             label = { Text("My Books") },
             selected = false,
-            onClick = { /* Navigate to My Books */ }
-        )
-        NavigationBarItem(
-            icon = {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_account),
-                    contentDescription = "Account",
-                    modifier = Modifier.size(24.dp) // Set the icon size to 24dp
-                )
-            },
-            label = { Text("Account") },
-            selected = false,
-            onClick = { /* Navigate to Account */ }
+            onClick = {
+                navController.navigate("my_books") {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true }
+            }
         )
     }
 }
 
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun AddBookScreen(navController: NavController, userDao: UserDao, bookDao: BookDao, context: Context) {
-    val currentUserEmail = getCurrentUserEmail(context) // Retrieve the current user's email
+    val currentUserEmail = getCurrentUserEmail(context)
     if (currentUserEmail == null) {
         navController.navigate("login")
         return
@@ -526,106 +498,107 @@ fun AddBookScreen(navController: NavController, userDao: UserDao, bookDao: BookD
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(currentUserEmail) {
-        // Fetch the user by email when the composable is first launched
         currentUser = userDao.getUserByEmail(currentUserEmail)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()), // Add scrolling if content overflows
-        horizontalAlignment = Alignment.CenterHorizontally
+    Scaffold(
+        bottomBar = {
+            BottomNavigationBar(navController)
+        }
     ) {
-        Spacer(modifier = Modifier.height(100.dp)) // Adds space at the top to align with other screens
-
-        Text(text = "Post a Book", style = MaterialTheme.typography.headlineLarge)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Author
-        Text(text = "Author")
-        OutlinedTextField(
-            value = author,
-            onValueChange = { author = it },
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            textStyle = MaterialTheme.typography.bodyMedium,
-            label = { Text("Enter Author Name") }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Title
-        Text(text = "Title")
-        OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            textStyle = MaterialTheme.typography.bodyMedium,
-            label = { Text("Enter Book Title") }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Year
-        Text(text = "Year")
-        OutlinedTextField(
-            value = year,
-            onValueChange = { year = it },
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            textStyle = MaterialTheme.typography.bodyMedium,
-            label = { Text("Enter Release Year") },
-            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Genre
-        Text(text = "Genre")
-        OutlinedTextField(
-            value = genre,
-            onValueChange = { genre = it },
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            textStyle = MaterialTheme.typography.bodyMedium,
-            label = { Text("Enter Genre") }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Price
-        Text(text = "Price")
-        OutlinedTextField(
-            value = price,
-            onValueChange = { price = it },
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            textStyle = MaterialTheme.typography.bodyMedium,
-            label = { Text("Enter Price") },
-            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = {
-                val book = Book(
-                    author = author.text,
-                    title = title.text,
-                    year = year.text.toIntOrNull() ?: 0,
-                    genre = genre.text,
-                    price = price.text.toDoubleOrNull() ?: 0.0,
-                    email = currentUserEmail // Use the current user's email here
-                )
-                scope.launch {
-                    bookDao.insert(book)
-                    navController.navigate("home") // Navigate to the home screen after posting the book
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = "Post")
+            Spacer(modifier = Modifier.height(100.dp))
+
+            Text(text = "Post a Book", style = MaterialTheme.typography.headlineLarge)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(text = "Author")
+            OutlinedTextField(
+                value = author,
+                onValueChange = { author = it },
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                label = { Text("Enter Author Name") }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(text = "Title")
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                label = { Text("Enter Book Title") }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(text = "Year")
+            OutlinedTextField(
+                value = year,
+                onValueChange = { year = it },
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                label = { Text("Enter Release Year") },
+                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(text = "Genre")
+            OutlinedTextField(
+                value = genre,
+                onValueChange = { genre = it },
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                label = { Text("Enter Genre") }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(text = "Price")
+            OutlinedTextField(
+                value = price,
+                onValueChange = { price = it },
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                label = { Text("Enter Price") },
+                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    val book = Book(
+                        author = author.text,
+                        title = title.text,
+                        year = year.text.toIntOrNull() ?: 0,
+                        genre = genre.text,
+                        price = price.text.toDoubleOrNull() ?: 0.0,
+                        email = currentUserEmail
+                    )
+                    scope.launch {
+                        bookDao.insert(book)
+                        navController.navigate("home")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = "Post")
+            }
         }
     }
 }
+
 
 
 fun saveUserEmail(context: Context, email: String) {
@@ -639,4 +612,35 @@ fun saveUserEmail(context: Context, email: String) {
 fun getCurrentUserEmail(context: Context): String? {
     val sharedPref = context.getSharedPreferences("user_data", Context.MODE_PRIVATE)
     return sharedPref.getString("current_user_email", null)
+}
+
+@Composable
+fun MyBooksScreen(bookDao: BookDao, navController: NavController) {
+    val context = LocalContext.current
+    val bookViewModel = BookViewModel(context.applicationContext as Application)
+
+    val books by bookViewModel.allBooks.observeAsState(initial = emptyList())
+
+    Scaffold(
+        bottomBar = {
+            BottomNavigationBar(navController)
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .padding(paddingValues)
+                .padding(16.dp)
+                .fillMaxSize()
+        ) {
+            Text("My Books", style = MaterialTheme.typography.headlineMedium)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn {
+                items(books) { book ->
+                    BookCard(book)
+                }
+            }
+        }
+    }
 }
