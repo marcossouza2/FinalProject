@@ -1,6 +1,7 @@
 package com.example.finalproject
 
 import android.app.Application
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -10,7 +11,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Visibility
@@ -23,10 +27,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -101,7 +108,10 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable("home") {
-                        HomeScreen(bookDao) // Pass bookDao to HomeScreen for accessing books
+                        HomeScreen(bookDao, navController) // Pass bookDao to HomeScreen for accessing books
+                    }
+                    composable("addBook") {
+                        AddBookScreen(navController, userDao, bookDao, context = LocalContext.current)
                     }
                 }
             }
@@ -185,7 +195,9 @@ fun LoginScreenUI(
                     userViewModel.validateLogin(email, password) { user ->
                         if (user != null) {
                             // Successful login, navigate to home
+                            saveUserEmail(context, user.email)
                             onNavigateToHome()
+
                         } else {
                             // Show error message for invalid login
                             errorMessage = "Invalid credentials"
@@ -357,7 +369,7 @@ fun SignUpScreen(
 
 
 @Composable
-fun HomeScreen(bookDao: BookDao) {
+fun HomeScreen(bookDao: BookDao, navController: NavController) {
     val context = LocalContext.current
     val bookViewModel = BookViewModel(context.applicationContext as Application)
 
@@ -366,7 +378,7 @@ fun HomeScreen(bookDao: BookDao) {
 
     Scaffold(
         bottomBar = {
-            BottomNavigationBar()
+            BottomNavigationBar(navController)
         }
     ) { paddingValues ->
         Column(
@@ -442,7 +454,7 @@ data class Book(
 )
 
 @Composable
-fun BottomNavigationBar() {
+fun BottomNavigationBar(navController: NavController) {
     NavigationBar {
         NavigationBarItem(
             icon = {
@@ -466,7 +478,7 @@ fun BottomNavigationBar() {
             },
             label = { Text("Add Book") },
             selected = false,
-            onClick = { /* Navigate to Add Book */ }
+            onClick = { navController.navigate("addBook") }
         )
         NavigationBarItem(
             icon = {
@@ -495,4 +507,136 @@ fun BottomNavigationBar() {
     }
 }
 
+@Composable
+fun AddBookScreen(navController: NavController, userDao: UserDao, bookDao: BookDao, context: Context) {
+    val currentUserEmail = getCurrentUserEmail(context) // Retrieve the current user's email
+    if (currentUserEmail == null) {
+        navController.navigate("login")
+        return
+    }
 
+    var author by remember { mutableStateOf(TextFieldValue()) }
+    var title by remember { mutableStateOf(TextFieldValue()) }
+    var year by remember { mutableStateOf(TextFieldValue()) }
+    var genre by remember { mutableStateOf(TextFieldValue()) }
+    var price by remember { mutableStateOf(TextFieldValue()) }
+
+    var currentUser by remember { mutableStateOf<User?>(null) }
+
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(currentUserEmail) {
+        // Fetch the user by email when the composable is first launched
+        currentUser = userDao.getUserByEmail(currentUserEmail)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()), // Add scrolling if content overflows
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(100.dp)) // Adds space at the top to align with other screens
+
+        Text(text = "Post a Book", style = MaterialTheme.typography.headlineLarge)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Author
+        Text(text = "Author")
+        OutlinedTextField(
+            value = author,
+            onValueChange = { author = it },
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            label = { Text("Enter Author Name") }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Title
+        Text(text = "Title")
+        OutlinedTextField(
+            value = title,
+            onValueChange = { title = it },
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            label = { Text("Enter Book Title") }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Year
+        Text(text = "Year")
+        OutlinedTextField(
+            value = year,
+            onValueChange = { year = it },
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            label = { Text("Enter Release Year") },
+            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Genre
+        Text(text = "Genre")
+        OutlinedTextField(
+            value = genre,
+            onValueChange = { genre = it },
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            label = { Text("Enter Genre") }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Price
+        Text(text = "Price")
+        OutlinedTextField(
+            value = price,
+            onValueChange = { price = it },
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            label = { Text("Enter Price") },
+            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = {
+                val book = Book(
+                    author = author.text,
+                    title = title.text,
+                    year = year.text.toIntOrNull() ?: 0,
+                    genre = genre.text,
+                    price = price.text.toDoubleOrNull() ?: 0.0,
+                    email = currentUserEmail // Use the current user's email here
+                )
+                scope.launch {
+                    bookDao.insert(book)
+                    navController.navigate("home") // Navigate to the home screen after posting the book
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Post")
+        }
+    }
+}
+
+
+fun saveUserEmail(context: Context, email: String) {
+    val sharedPref = context.getSharedPreferences("user_data", Context.MODE_PRIVATE)
+    with(sharedPref.edit()) {
+        putString("current_user_email", email)
+        apply()
+    }
+}
+
+fun getCurrentUserEmail(context: Context): String? {
+    val sharedPref = context.getSharedPreferences("user_data", Context.MODE_PRIVATE)
+    return sharedPref.getString("current_user_email", null)
+}
